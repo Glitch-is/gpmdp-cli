@@ -1,3 +1,2 @@
 asyncio
 websockets
-json
