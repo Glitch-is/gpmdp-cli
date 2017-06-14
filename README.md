@@ -49,32 +49,32 @@ optional arguments:
 Here are some examples of commands
 ### Toggle Play/Pause
 ```
-python3 gpmdp-cli.py playback playPause
+python3 gpmdp-cli.py "playback playPause"
 ```
 
 ### Play Next Song
 ```
-python3 gpmdp-cli.py playback forward
+python3 gpmdp-cli.py "playback forward"
 ```
 
 ### Play Previous Song
 ```
-python3 gpmdp-cli.py playback rewind
+python3 gpmdp-cli.py "playback rewind"
 ```
 
 ### Play Song From Start
 ```
-python3 gpmdp-cli.py playback setCurrentTime [0]
+python3 gpmdp-cli.py "playback setCurrentTime [0]"
 ```
 
 ### Toggle Thumps Up Rating On Current Song
 ```
-python3 gpmdp-cli.py rating toggleThumbsUp
+python3 gpmdp-cli.py "rating toggleThumbsUp"
 ```
 
 ### Increase The Volume By 5
 ```
-python3 gpmdp-cli.py volume increaseVolume [5]
+python3 gpmdp-cli.py "volume increaseVolume [5]"
 ```
 
 Further documentation of the API can be found [Here](https://github.com/gmusic-utils/gmusic.js#documentation)
