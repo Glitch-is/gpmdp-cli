@@ -17,12 +17,13 @@ pip install -r requirements.txt
 
 # Setup
 ## Enable Playback API
-You must enable the Playback API in the `Desktop Setings` of GPMDP. It's a
-checkbock in the `General` section.
+You must check the `Enable Playback API` checkbox in the GENERAL section of GPMDP's
+Settings.
+
 ## Authenticating
 When you first use the client a UI will popup in GPMDP containing a 4 digit
 code. This code must be entered into `gpmdp-cli` when prompted to authorize the
- client to control GPMDP. A message should pop up in GPMDP when `gpmdp-cli`
+client to control GPMDP. A message should pop up in GPMDP when `gpmdp-cli`
 has taken control.
 
 # Usage

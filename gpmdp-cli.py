@@ -26,6 +26,8 @@ async def recvUntil(websocket, channel):
                 return response
 
 def saveAuthCode(code, tokenFile):
+    if not os.path.exists(os.path.dirname(tokenFile)):
+        os.mkdir(os.path.dirname(tokenFile))
     with open(tokenFile, "w+") as f:
         f.write(code)
 
