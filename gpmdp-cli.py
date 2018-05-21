@@ -19,7 +19,7 @@ async def sendCommand(websocket, payload):
 
     try:
         await websocket.send(json.dumps(payload))
-        response = await asyncio.wait_for(recvCommand(websocket, requestID), 2)
+        response = await asyncio.wait_for(recvCommand(websocket, requestID), TIMEOUT)
         if "value" in response:
             print(response["value"])
     except asyncio.TimeoutError:
@@ -78,16 +78,17 @@ async def connect(websocket, tokenFile):
             "arguments": ["gpmdp-cli"]
             }
 
-    code = await getAuthCode(websocket, tokenFile, payload)
-    payload["arguments"] = ["gpmdp-cli", code]
+    authCode = await getAuthCode(websocket, tokenFile, payload)
+    payload["arguments"] = ["gpmdp-cli", authCode]
     await websocket.send(json.dumps(payload))
 
 
 def parseCommands(args):
-    payload = {}
-    payload["namespace"] = args.namespace
-    payload["method"] = args.method
-    payload["arguments"] = ' '.join(args.arguments)
+    payload = {
+            "namespace": args.namespace,
+            "method": args.method,
+            "arguments": args.arguments
+            }
     return payload
 
 
