@@ -1,22 +1,37 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import asyncio
 import websockets
 import json
 import os
 import argparse
+import random
+import sys
+
+TIMEOUT = 2  # seconds
+DEFAULT_TOKEN_FILE = "~/.config/Google Play Music Desktop Player/gpmdp-cli.token"
+DEFAULT_SERVER_URL = "ws://localhost:5672"
 
 
 async def sendCommand(websocket, payload):
-    namespace = payload["namespace"]
-    method = payload["method"]
-    arguments = payload["arguments"]
+    requestID = str(random.randrange(9999))
+    payload["requestID"] = requestID
 
-    payload = '{"namespace":"'+namespace+'","method":"'+method+'"'+(', "arguments":'+arguments if arguments else '')+'}'
-    print("Sending payload:")
-    print(payload)
-    await websocket.send(payload)
+    try:
+        await websocket.send(json.dumps(payload))
+        response = await asyncio.wait_for(recvCommand(websocket, requestID), TIMEOUT)
+        if "value" in response:
+            print(response["value"])
+    except asyncio.TimeoutError:
+        print(f"No reponse from server; are you sure `{payload['namespace']} {payload['method']} {payload['arguments']}` is a valid command?", file=sys.stderr)
+        sys.exit(1)
 
+async def recvCommand(websocket, requestID):
+    while True:
+        response = json.loads(await websocket.recv())
+        if "requestID" in response:
+            if response["requestID"] == str(requestID):
+                return response
 
 async def recvUntil(websocket, channel):
     while True:
@@ -25,78 +40,84 @@ async def recvUntil(websocket, channel):
             if response["channel"] == channel:
                 return response
 
-def saveAuthCode(code, tokenFile):
-    if not os.path.exists(os.path.dirname(tokenFile)):
-        os.mkdir(os.path.dirname(tokenFile))
-    with open(tokenFile, "w+") as f:
-        f.write(code)
-
-
-def loadAuthCode(tokenFile):
+async def getAuthCode(websocket, tokenFile, payload):
     if os.path.exists(tokenFile):
         with open(tokenFile, "r") as f:
             return f.read()
     else:
-        return ""
+        code = await collectAuthCode(websocket, tokenFile, payload)
+        saveAuthCode(code, tokenFile)
+        return code
+
+
+async def collectAuthCode(websocket, tokenFile, payload):
+    await websocket.send(json.dumps(payload))
+    await recvUntil(websocket, "connect")
+
+    print("A UI will popup in GPMDP containing a 4 digit code")
+    code = input("Enter code here: ")
+    payload["arguments"].append(code)
+
+    await websocket.send(json.dumps(payload))
+    authResponse = await recvUntil(websocket, "connect")
+    return authResponse["payload"]
+
+
+def saveAuthCode(code, tokenFile):
+    if not os.path.exists(os.path.dirname(tokenFile)):
+        os.mkdir(os.path.dirname(tokenFile))
+
+    with open(tokenFile, "w+") as f:
+        f.write(code)
 
 
 async def connect(websocket, tokenFile):
-    payload = {}
-    payload["namespace"] = "connect"
-    payload["method"] = "connect"
-    payload["arguments"] = ["gpmdp-cli"]
+    payload = {
+            "namespace": "connect",
+            "method": "connect",
+            "arguments": ["gpmdp-cli"]
+            }
 
-    code = loadAuthCode(tokenFile)
-    if code == "":
-
-        await websocket.send(json.dumps(payload))
-        await recvUntil(websocket, "connect")
-
-        print("A UI will popup in GPMDP containing a 4 digit code")
-        code = input("Enter code here: ")
-        payload["arguments"].append(code)
-
-        await websocket.send(json.dumps(payload))
-
-        authResponse = await recvUntil(websocket, "connect")
-        code = authResponse["payload"]
-        saveAuthCode(code, tokenFile)
-
-    payload["arguments"] = ["gpmdp-cli", code]
+    authCode = await getAuthCode(websocket, tokenFile, payload)
+    payload["arguments"] = ["gpmdp-cli", authCode]
     await websocket.send(json.dumps(payload))
 
-    print("Connected to client!")
 
-
-def parseCommands(commands):
-    c = commands.split()
-    payload = {}
-    payload["namespace"] = c[0]
-    payload["method"] = c[1]
-    payload["arguments"] = ' '.join(c[2:])
+def parseCommands(args):
+    payload = {
+            "namespace": args.namespace,
+            "method": args.method,
+            "arguments": args.arguments
+            }
     return payload
 
 
 async def main(args):
     socketServer = args.socket_server
     tokenFile = os.path.abspath(os.path.expanduser(args.token_file))
-    commands = args.commands
 
     async with websockets.connect(socketServer) as websocket:
         await connect(websocket, tokenFile)
-        await sendCommand(websocket, parseCommands(commands))
+        await sendCommand(websocket, parseCommands(args))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Google Play Desktop Music Player CLI client')
-    parser.add_argument('commands',
-                        help='API commands that will be sent to the socket server')
-    parser.add_argument('--token-file',
-                        help='Path to token file',
-                        default="~/.config/Google Play Music Desktop Player/gpmdp-cli.token")
-    parser.add_argument('--socket-server',
-                        help='URL to socket server',
-                        default='ws://localhost:5672')
+    parser = argparse.ArgumentParser(description="Google Play Desktop Music Player CLI client",
+            epilog=f"See https://github.com/gmusic-utils/gmusic.js#documentation for a full list of\
+                    commands (where `playback.playPause()` from that page would be called with\
+                    `{os.path.splitext(os.path.basename(__file__))[0]} playback playPause`)")
+    parser.add_argument("namespace",
+                        help="Command namespace, eg. playback, volume, rating")
+    parser.add_argument("method",
+                        help="Command method, eg. playPause, getVolume, setRating")
+    parser.add_argument("arguments", nargs="*",
+                        help="Arguments for method, eg. 3 in `rating setRating 3`")
+    parser.add_argument("--token-file",
+                        help="Path to token file",
+                        default=DEFAULT_TOKEN_FILE)
+    parser.add_argument("--socket-server",
+                        help="URL to socket server",
+                        default=DEFAULT_SERVER_URL)
 
     args = parser.parse_args()
     asyncio.get_event_loop().run_until_complete(main(args))
